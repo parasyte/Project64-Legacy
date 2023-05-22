@@ -1490,6 +1490,10 @@ LRESULT CALLBACK Main_Proc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 					Enter_TLB_Window();
 					break;
 
+				case ID_DEBUGGER_LOGDISPLAYLISTS:
+					CPU_Action.DlDebug = TRUE;
+					break;
+
 				case ID_DEBUGGER_SHOWUNHANDLEDMEMORYACCESSES:
 					if (HaveDebugger) {
 						hMenu = GetMenu(hWnd);

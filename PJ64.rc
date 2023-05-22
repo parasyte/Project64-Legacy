@@ -947,6 +947,7 @@ BEGIN
         END
         MENUITEM "Memory...",                   ID_DEBUGGER_MEMORY, GRAYED
         MENUITEM "TLB Entries...",              ID_DEBUGGER_TLBENTRIES, GRAYED
+        MENUITEM "Log DisplayLists",            ID_DEBUGGER_LOGDISPLAYLISTS
         MENUITEM SEPARATOR
         MENUITEM "Call Stack....",              ID_DEBUGGER_CALLSTACK
         MENUITEM SEPARATOR

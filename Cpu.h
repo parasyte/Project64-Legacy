@@ -54,6 +54,9 @@ typedef struct {
 	BOOL DoInterrupt;
 	BOOL Stepping;
 	BOOL Skipping;
+
+	BOOL DlDebug;
+	BOOL DlDebugDone;
 } CPU_ACTION;
 
 

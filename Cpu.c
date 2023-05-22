@@ -1114,6 +1114,11 @@ void RefreshScreen (void ){
 	if (Profiling) { StartTimer("RefreshScreen: Cheats"); }
 	if ((STATUS_REGISTER & STATUS_IE) != 0 ) { ApplyCheats(); Apply_CheatSearchDev(); }
 	if (Profiling || ShowCPUPer) { StartTimer(Label); }
+
+	if (CPU_Action.DlDebug && CPU_Action.DlDebugDone) {
+		CPU_Action.DlDebug = FALSE;
+		CPU_Action.DlDebugDone = FALSE;
+	}
 }
 
 void RunRsp (void) {
