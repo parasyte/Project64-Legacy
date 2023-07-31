@@ -44,4 +44,7 @@ BOOL CheckForWatchPoint(DWORD Location, WATCH_TYPE Type, int Size);
 int CountWatchPoints(void);
 void RefreshWatchPoints(HWND hList);
 
+// HAX
+extern BOOL Begin6106Watch;
+
 #endif

@@ -739,12 +739,20 @@ void __cdecl StartInterpreterCPU (void ) {
 
 	NextInstruction = NORMAL;
 
+	// HAX
+	Begin6106Watch = FALSE;
+
 	if (GfxRomOpen != NULL) { GfxRomOpen(); }
 	if (ContRomOpen != NULL) { ContRomOpen(); }
 	if (RSPRomOpen != NULL) { RSPRomOpen(); }
 	__try {
 		for (;;) {
 			if (HaveDebugger) {
+				// HAX: Yoshi's Story
+				if (PROGRAM_COUNTER == 0x80000400) {
+					Begin6106Watch = TRUE;
+				}
+
 				if (NoOfBpoints != 0 && CheckForR4300iBPoint(PROGRAM_COUNTER)) {
 					TriggerDebugger();
 				}

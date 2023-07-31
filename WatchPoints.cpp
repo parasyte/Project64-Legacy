@@ -31,6 +31,9 @@ extern "C" {
 	#include "Interpreter CPU.h"
 	#include "main.h"
 	#include "cpu.h"
+
+	// HAX
+	BOOL Begin6106Watch = FALSE;
 }
 
 // Each watchpoint covers 8 bytes of memory, aligned to 64-bit boundaries.
@@ -135,6 +138,27 @@ BOOL CheckForWatchPoint(DWORD Location, WATCH_TYPE Type, int Size) {
 	MemoryBarrier();
 
 	Location &= ~0xE0000000;
+
+    // HAX
+    if (!HaveDebugger || CPU_Action.CloseCPU || CPU_Action.Stepping) {
+        return FALSE;
+    }
+    if (Begin6106Watch && ((int)Type & WP_READ) && (
+        // Check locations that IPL3 writes to
+        (Location >= 0x04000000 && Location < 0x04002000) ||
+        (Location >= 0x00000000 && Location < 0x00000300) ||
+        (Location >= 0x00000310 && Location < 0x00000313) ||
+
+        // Any address within IPL3
+        (Location >= 0x10000040 && Location < 0x10001000)
+    )) {
+        TriggerDebugger();
+
+        // Block the CPU thread until resumed by the debugger
+        WaitForSingleObject(CPU_Action.hStepping, INFINITE);
+
+        return TRUE;
+    }
 
 	if (!HaveDebugger || CPU_Action.CloseCPU || CPU_Action.Stepping || WatchPoints->empty()) {
 		return FALSE;
