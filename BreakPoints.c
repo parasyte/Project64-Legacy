@@ -116,8 +116,11 @@ void BPoint_AddButtonPressed (void) {
 				SetFocus(hR4300iLocation);
 			}
 		} else {
-			AddWatchPoint(AsciiToHex(Address), BreakType);
-			RefreshBreakPoints();
+			if (AddWatchPoint(AsciiToHex(Address), BreakType)) {
+				RefreshBreakPoints();
+			} else {
+				DisplayError("Invalid watchpoint address: 0x%08X\nTLB-mapped address support is a work in progress", AsciiToHex(Address));
+			}
 		}
 		break;
 	}

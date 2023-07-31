@@ -33,7 +33,19 @@ extern "C" {
 	#include "cpu.h"
 }
 
-std::unordered_map<DWORD, int[8]>* WatchPoints = NULL;
+// Each watchpoint covers 8 bytes of memory, aligned to 64-bit boundaries.
+// The 8 bytes stored in the map are bitflags with the following layout:
+//
+// ╭─────┬──────┬──────┬───┬───┬───╮
+// │ Bit │ 7..5 │ 4..3 │ 2 │ 1 │ 0 │
+// ╰─────┴───┬──┴───┬──┴─┬─┴─┬─┴─┬─╯
+//           ┆      ┆    ┆   ┆   ╰┄┄┄┄ Read access
+//           ┆      ┆    ┆   ╰┄┄┄┄┄┄┄┄ Write access
+//           ┆      ┆    ╰┄┄┄┄┄┄┄┄┄┄┄┄ Watchpoint enabled
+//           ┆      ╰┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄ RESERVED
+//           ╰┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄ Upper bits of original address
+//
+std::unordered_map<DWORD, uint8_t[8]>* WatchPoints = NULL;
 
 void InitWatchPoints(void) {
 	// Default size is implementation-defined (may as well be unknown).
@@ -46,25 +58,36 @@ void InitWatchPoints(void) {
 	// (everything else being equal) the optimal size should be 5 / 0.01 = 500.
 	const UINT HASH_SIZE = 500;
 
-	WatchPoints = new std::unordered_map<DWORD, int[8]>({}, HASH_SIZE);
+	WatchPoints = new std::unordered_map<DWORD, uint8_t[8]>({}, HASH_SIZE);
 }
 
-void AddWatchPoint(DWORD Location, WATCH_TYPE Type) {
+BOOL AddWatchPoint(DWORD Location, WATCH_TYPE Type) {
+	if ((Location >= 0x20000000 && Location < 0x80000000) || (Location >= 0xC0000000)) {
+		// TODO: Currently only supports physical addresses below 0x20000000, KSEG0, and KSEG1.
+		// This is a horrible hack, but we assume that any address below 0x20000000 is a physical address.
+		return FALSE;
+	}
+
+	uint8_t upper_bits = (Location >> 24) & 0xE0;
+	Location &= ~0xE0000000;
 	auto search = WatchPoints->find(Location & ~7);
 	if (search == WatchPoints->end()) {
-		int* wp = (*WatchPoints)[Location & ~7];
+		uint8_t *wp = (*WatchPoints)[Location & ~7];
 		for (int i = 0; i < 8; i++) {
 			wp[i] = WP_NONE;
 		}
 	}
 
-	(*WatchPoints)[Location & ~7][Location & 7] = (int)Type | WP_ENABLED;
+	(*WatchPoints)[Location & ~7][Location & 7] = (uint8_t)Type | WP_ENABLED | upper_bits;
+
+	return TRUE;
 }
 
 void RemoveWatchPoint(DWORD Location) {
+	Location &= ~0xE0000000;
 	auto search = WatchPoints->find(Location & ~7);
 	if (search != WatchPoints->end()) {
-		int *wp = search->second;
+		uint8_t *wp = search->second;
 		wp[Location & 7] = WP_NONE;
 
 		int i;
@@ -84,6 +107,7 @@ void RemoveAllWatchPoints(void) {
 }
 
 void ToggleWatchPoint(DWORD Location) {
+	Location &= ~0xE0000000;
 	WATCH_TYPE Type = HasWatchPoint(Location);
 	if (Type != WP_NONE) {
 		(*WatchPoints)[Location & ~7][Location & 7] = (int)Type ^ WP_ENABLED;
@@ -91,6 +115,7 @@ void ToggleWatchPoint(DWORD Location) {
 }
 
 WATCH_TYPE HasWatchPoint(DWORD Location) {
+	Location &= ~0xE0000000;
 	auto search = WatchPoints->find(Location & ~7);
 	if (search == WatchPoints->end()) {
 		return WP_NONE;
@@ -109,27 +134,36 @@ BOOL CheckForWatchPoint(DWORD Location, WATCH_TYPE Type, int Size) {
 	// Thus avoiding a potential deadlock.
 	MemoryBarrier();
 
+	Location &= ~0xE0000000;
+
 	if (!HaveDebugger || CPU_Action.CloseCPU || CPU_Action.Stepping || WatchPoints->empty()) {
 		return FALSE;
 	}
 
-	auto search = WatchPoints->find(Location & ~7);
-	if (search == WatchPoints->end()) {
-		return FALSE;
-	}
+	while (Size > 0) {
+		int start = Location & 7;
+		int end = min(start + Size, 8);
 
-	int *wp = search->second;
-	int start = Location & 7;
-	for (int i = start; i < start + Size; i++) {
-		int value = wp[i];
-		if ((value & WP_ENABLED) && (value & (int)Type)) {
-			TriggerDebugger();
+		Location &= ~7;
 
-			// Block the CPU thread until resumed by the debugger
-			WaitForSingleObject(CPU_Action.hStepping, INFINITE);
+		auto search = WatchPoints->find(Location);
+		if (search != WatchPoints->end()) {
+			uint8_t *wp = search->second;
+			for (int i = start; i < end; i++) {
+				int value = wp[i];
+				if ((value & WP_ENABLED) && (value & (int)Type)) {
+					TriggerDebugger();
 
-			return TRUE;
+					// Block the CPU thread until resumed by the debugger
+					WaitForSingleObject(CPU_Action.hStepping, INFINITE);
+
+					return TRUE;
+				}
+			}
 		}
+
+		Location += 8;
+		Size -= (8 - start);
 	}
 
 	return FALSE;
@@ -139,7 +173,7 @@ int CountWatchPoints(void) {
 	int count = 0;
 
 	for (auto &iter : *WatchPoints) {
-		int* wp = iter.second;
+		uint8_t *wp = iter.second;
 		for (int i = 0; i < 8; i++) {
 			if (wp[i] != WP_NONE) {
 				count++;
@@ -154,8 +188,8 @@ void RefreshWatchPoints(HWND hList) {
 	char message[100];
 
 	for (auto &iter : *WatchPoints) {
-		int key = iter.first;
-		int *wp = iter.second;
+		DWORD key = iter.first;
+		uint8_t *wp = iter.second;
 		for (int i = 0; i < 8; i++) {
 			int value = wp[i];
 			if (value == WP_NONE) {
@@ -173,7 +207,8 @@ void RefreshWatchPoints(HWND hList) {
 				flags[3] = 'w';
 			}
 
-			int location = key | i;
+			DWORD upper_bits = ((DWORD)wp[i] & 0xE0) << 24;
+			DWORD location = upper_bits | key | i;
 			sprintf(message, " at 0x%08X (r4300i %s)", location, flags);
 			SendMessage(hList, LB_ADDSTRING, 0, (LPARAM)message);
 			int index = SendMessage(hList, LB_GETCOUNT, 0, 0) - 1;

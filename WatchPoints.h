@@ -35,7 +35,7 @@ typedef enum {
 } WATCH_TYPE;
 
 void InitWatchPoints(void);
-void AddWatchPoint(DWORD Location, WATCH_TYPE Type);
+BOOL AddWatchPoint(DWORD Location, WATCH_TYPE Type);
 void RemoveWatchPoint(DWORD Location);
 void ToggleWatchPoint(DWORD Location);
 void RemoveAllWatchPoints(void);

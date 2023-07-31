@@ -58,6 +58,9 @@ void PI_DMA_READ (void) {
 	PI_CART_ADDR_REG &= ~1;	// Taz Express fix
 	PI_DRAM_ADDR_REG &= ~7;	// Tax Express fix
 
+	CheckForWatchPoint(PI_CART_ADDR_REG, WP_WRITE, PI_RD_LEN_REG + 1);
+	CheckForWatchPoint(PI_DRAM_ADDR_REG, WP_READ, PI_RD_LEN_REG + 1);
+
 	if ( PI_DRAM_ADDR_REG + PI_RD_LEN_REG + 1 > RdramSize) {
 		if (ShowDebugMessages)
 			DisplayError("PI_DMA_READ not in Memory");
@@ -126,6 +129,8 @@ void PI_DMA_WRITE (void) {
 	PI_CART_ADDR_REG &= ~1;	// Taz Express fix
 	PI_DRAM_ADDR_REG &= ~7;	// Taz Express fix
 
+	CheckForWatchPoint(PI_DRAM_ADDR_REG, WP_WRITE, PI_WR_LEN_REG + 1);
+
 	PI_STATUS_REG |= PI_STATUS_DMA_BUSY;
 	if ( PI_DRAM_ADDR_REG + PI_WR_LEN_REG + 1 > RdramSize) {
 		if (ShowDebugMessages)
@@ -142,6 +147,7 @@ void PI_DMA_WRITE (void) {
 		(PI_CART_ADDR_REG >= 0x08040000 && PI_CART_ADDR_REG <= 0x08050000) ||
 		(PI_CART_ADDR_REG >= 0x08080000 && PI_CART_ADDR_REG <= 0x08090000))
 	{
+		CheckForWatchPoint(PI_CART_ADDR_REG, WP_READ, PI_WR_LEN_REG + 1);
 		switch (SaveUsing) {
 		case Auto:
 			SaveUsing = Sram;
@@ -177,6 +183,7 @@ void PI_DMA_WRITE (void) {
 		}
 #endif
 		PI_CART_ADDR_REG -= 0x06000000;
+		CheckForWatchPoint(PI_CART_ADDR_REG | 0x10000000, WP_READ, PI_WR_LEN_REG + 1);
 		if (PI_CART_ADDR_REG + PI_WR_LEN_REG + 1 < RomFileSize) {
 			for (i = 0; i < PI_WR_LEN_REG + 1; i ++) {
 				*(N64MEM+((PI_DRAM_ADDR_REG + i) ^ 3)) =  *(ROM+((PI_CART_ADDR_REG + i) ^ 3));
@@ -213,6 +220,7 @@ void PI_DMA_WRITE (void) {
 			VirtualProtect(ROM,RomFileSize,PAGE_READONLY, &OldProtect);
 		}
 #endif
+		CheckForWatchPoint(PI_CART_ADDR_REG, WP_READ, PI_WR_LEN_REG + 1);
 		PI_CART_ADDR_REG -= 0x10000000;
 		if (PI_CART_ADDR_REG + PI_WR_LEN_REG + 1 < RomFileSize) {
 			for (i = 0; i < PI_WR_LEN_REG + 1; i ++) {
@@ -242,7 +250,7 @@ void PI_DMA_WRITE (void) {
 		CheckTimer();
 		return;
 	}
-	
+
 	if (HaveDebugger && ShowUnhandledMemory) { DisplayError("PI_DMA_WRITE not in ROM"); }
 	PI_STATUS_REG &= ~PI_STATUS_DMA_BUSY;
 	MI_INTR_REG |= MI_INTR_PI;
@@ -252,6 +260,9 @@ void PI_DMA_WRITE (void) {
 
 void SI_DMA_READ (void) {
 	BYTE * PifRamPos = &PIF_Ram[0];
+
+	CheckForWatchPoint(SI_DRAM_ADDR_REG, WP_WRITE, 64);
+	CheckForWatchPoint(SI_PIF_ADDR_WR64B_REG, WP_READ, 64);
 
 	SI_DRAM_ADDR_REG &= 0x7FFFFFFF;
 
@@ -339,6 +350,9 @@ void SI_DMA_READ (void) {
 
 void SI_DMA_WRITE (void) {
 	BYTE * PifRamPos = &PIF_Ram[0];
+
+	CheckForWatchPoint(SI_PIF_ADDR_WR64B_REG, WP_WRITE, 64);
+	CheckForWatchPoint(SI_DRAM_ADDR_REG, WP_READ, 64);
 
 	SI_DRAM_ADDR_REG &= 0x7FFFFFFF;
 
@@ -454,6 +468,10 @@ void SP_DMA_READ (void) {
 	if ((SP_DRAM_ADDR_REG & 3) != 0) { _asm int 3 }
 	if (((SP_RD_LEN_REG + 1) & 3) != 0) { _asm int 3 }
 	*/
+
+	CheckForWatchPoint(SP_MEM_ADDR_REG, WP_WRITE, SP_RD_LEN_REG + 1);
+	CheckForWatchPoint(SP_DRAM_ADDR_REG, WP_READ, SP_RD_LEN_REG + 1);
+
 	memcpy( DMEM + (SP_MEM_ADDR_REG & 0x1FFF), N64MEM + SP_DRAM_ADDR_REG,
 		SP_RD_LEN_REG + 1 );
 		
@@ -479,6 +497,9 @@ void SP_DMA_WRITE (void) {
 	if ((SP_MEM_ADDR_REG & 3) != 0) { _asm int 3 }
 	if ((SP_DRAM_ADDR_REG & 3) != 0) { _asm int 3 }
 	if (((SP_WR_LEN_REG + 1) & 3) != 0) { _asm int 3 }
+
+	CheckForWatchPoint(SP_DRAM_ADDR_REG, WP_WRITE, SP_WR_LEN_REG + 1);
+	CheckForWatchPoint(SP_MEM_ADDR_REG, WP_READ, SP_WR_LEN_REG + 1);
 
 	memcpy( N64MEM + SP_DRAM_ADDR_REG, DMEM + (SP_MEM_ADDR_REG & 0x1FFF),
 		SP_WR_LEN_REG + 1);
