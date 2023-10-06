@@ -32,6 +32,9 @@
 
 // See: https://docs.microsoft.com/en-us/windows/win32/intl/code-page-identifiers
 #define CODEPAGE_EUC_JP 20932
+#ifndef ENABLE_VIRTUAL_TERMINAL_PROCESSING
+#define ENABLE_VIRTUAL_TERMINAL_PROCESSING 0x0004
+#endif
 
 static HANDLE STDOUT = NULL;
 static HANDLE hOutputMutex = NULL;
